@@ -1,0 +1,44 @@
+name: CI/CD Database Deploy
+
+on:
+  push:
+    branches:
+      - deploy
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Checkout del código
+        uses: actions/checkout@v4
+
+      - name: 2. Copiar archivos a EC2 Privada (Vía Proxy)
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          proxy_host: ${{ secrets.PROXY_HOST }}
+          proxy_username: ubuntu
+          proxy_key: ${{ secrets.EC2_SSH_KEY }}
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "docker-compose.yml,schema.sql,seed.sql"
+          target: "/home/ubuntu/db"
+
+      - name: 3. Ejecutar Despliegue Automático en EC2 Privado
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          proxy_host: ${{ secrets.PROXY_HOST }}
+          proxy_username: ubuntu
+          proxy_key: ${{ secrets.EC2_SSH_KEY }}
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            sudo apt-get update -y
+            sudo apt-get install docker.io docker-compose-v2 -y
+            sudo systemctl start docker
+            cd /home/ubuntu/db
+            sudo docker compose up -d
